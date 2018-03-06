@@ -1,3 +1,4 @@
+MY_MEETUP_KEY <- "GET FROM https://secure.meetup.com/meetup_api/key/"
 library(httr)
 library(tidyverse)
 library(jsonlite)
@@ -7,8 +8,9 @@ library(forecast)
 
 # Get your Meetup key by going to
 # https://secure.meetup.com/meetup_api/key/
-MY_MEETUP_KEY = "MYMEETUPKEY"
-
+# mine is set in .Renviron
+MY_MEETUP_KEY <- MY_MEETUP_KEY
+MEETUP_KEY <- MY_MEETUP_KEY
 ########################################
 ###    .date_helper from rladies     ###
 ###     meetupr/internals.R          ###
@@ -99,10 +101,10 @@ AF16_frm <- meetup_yes_RSVPs("AF16", AF16_id)
 AF15_frm <- meetup_yes_RSVPs("AF15", AF15_id)
 
 allAF_frm    <- bind_rows(AF15_frm, AF16_frm, AF17_frm, AF18_frm) %>%
-                 arrange(id_name, dates_yes) %>%
-                 group_by(id_name) %>%
-                 mutate(day_counter = row_number()) %>%
-                 ungroup()
+  arrange(id_name, dates_yes) %>%
+  group_by(id_name) %>%
+  mutate(day_counter = row_number()) %>%
+  ungroup()
 
 AF18_ts      <- ts(allAF_frm$dates_yes_ct, start=allAF_frm$day_counter[1], end=allAF_frm$day_counter[10])
 
@@ -120,8 +122,22 @@ allAF_frm$dates_yes_otheryear <- as.Date(
     allAF_frm$dates_yes,"%d-%m-2019"),
   format="%d-%m-%y")
 allAF_frm            <- allAF_frm %>% group_by(id_name) %>%
-  mutate(dates_yes_cumsum = cumsum(dates_yes_ct)) %>%
+  mutate(dates_yes_cumsum = cumsum(dates_yes_ct),
+         max_attendees = max(dates_yes_cumsum)) %>%
   ungroup()
+
+curyr   <- year(Sys.Date())
+curyr_c <- as.character(curyr)
+cur_id  <-  paste0("AF", str_sub(curyr_c, 3, 4))
+
+max_curyr <- allAF_frm %>% filter(id_name == cur_id) %>%
+              summarise(max_curyr = max(dates_yes_cumsum)) %>%
+              pull(max_curyr)
+max_attendees_all_historic = allAF_frm %>%
+    filter(dates_yes < ymd(paste0(curyr, '-01-01'))) %>%
+    summarise(max_curyr = max(dates_yes_cumsum)) %>%
+    pull(max_curyr)
+
 # Note for future self:
 #  This ggplot error may mean parentheses closed after
 #  geom lines (e.g., geom_point...) :
@@ -136,8 +152,8 @@ ggplot(data = allAF_frm,
   scale_x_date(date_labels = "%b") +
   xlab("Month of year") +
   ylab("YES (will attend) RSVPs from Meetup.com API") +
-  ggtitle(label = paste0("Research Triangle Analysts 'Analytics>Forward' as of  ",
-                         Sys.Date()),
+  ggtitle(label = paste0("Research Triangle Analysts 'Analytics>Forward' Registrations as of  ",
+                         Sys.time()),
           subtitle = "$10 includes meals. Mara Averick keynoting March 10, 2018.") +
   theme(plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5)) +
@@ -145,9 +161,29 @@ ggplot(data = allAF_frm,
   annotate("path",
            x=ymd('2020-01-28')+1*cos(seq(0,2*pi,length.out=25)),
            y=18+8*sin(seq(0,2*pi,length.out=25))) +
-  annotate("text", x = ymd('2020-01-29'), y = 30,
-           label = "What happened on 2018-01-29?",
-           size = 4)
+  annotate("text", x = ymd('2020-01-30'), y = 32,
+           label = "2018-01-29: Dr. Zeydy Ortiz\ndisseminates press release?",
+           size = 3) +
+  annotate("path",
+           x=ymd('2020-02-19')+1*cos(seq(0,2*pi,length.out=25)),
+           y=70+8*sin(seq(0,2*pi,length.out=25))) +
+  annotate("text", x = ymd('2020-02-20'), y = 85,
+           label = "2018-02-20: Justin Ellis presents a well-attended\nDeep Learning talk and Melinda Thielbar\n rousingly encourages attendees to register for Analytics Forward",
+           size = 2) +
+  annotate("path",
+           x=ymd('2020-03-02')+1*cos(seq(0,2*pi,length.out=25)),
+           y=105+8*sin(seq(0,2*pi,length.out=25))) +
+  annotate("text", x = ymd('2020-03-02'), y = 122,
+           label = "2018-03-02: Monthly RTA lunch\nNext Day:\nNC Open Pass Data Jam",
+           size = 2.25) +
+  geom_hline(aes(yintercept = max_attendees_all)) +
+  annotate("text", x = ymd('2020-02-14'), y = max_attendees_all + 3,
+           label = paste0("Record registrations in prior years was ", max_attendees_all_historic),
+           size = 5) +
+  annotate("text", x = ymd('2020-02-01'), y = max_attendees_all - 16,
+           label = paste("Current count for", curyr, 
+                          "is", max_curyr, "registrations"),
+           size = 5)
 
 fit <- auto.arima(WWWusage)
 checkresiduals(fit)
